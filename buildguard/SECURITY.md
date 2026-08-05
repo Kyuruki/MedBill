@@ -69,11 +69,29 @@ UI-friendly `{ detail }` message.
 | `/api/analyze`       | 10 / minute, 50 / day    | 30 / minute                    |
 | `/api/generate-letter` | 5 / hour               | 15 / hour                      |
 
-**Known limitation (documented tradeoff):** the proxy limiter is **best-effort and
-in-memory per serverless instance** — counters are not shared across instances and reset
-on cold starts, so a client spread over N warm instances can get up to N× the limit. This
-raises the cost of casual abuse but is not a hard guarantee. Swap `lib/ratelimit.js` for
-Upstash/Redis for durable, cross-instance limits.
+**Durable since 2026-08-04.** Counters live in the Neon `rate_limit` table and are
+incremented atomically with a single `INSERT … ON CONFLICT DO UPDATE`, so they hold across
+serverless instances. The limiter increments before checking, so a denied request consumes
+quota (it does not extend the window).
+
+*Previously* these counters were in-memory per instance, which meant the documented limits
+above were not enforced in practice: a live measurement served **48 of 50 requests from a
+single IP in ~70 seconds** against the 10/minute rule, because each instance kept its own
+Map. Treat that as the reference example of why this had to move off-process.
+
+**Operational requirements and residual limits:**
+- `DATABASE_URL` must be set in the Vercel project env. Without it the module falls back
+  to the old in-memory behaviour **silently** — verify this env var before trusting the
+  numbers above.
+- On a database error or a query slower than 1.5s, the limiter degrades to in-memory
+  rather than failing the request, so a database outage weakens limits instead of taking
+  the site down. Modal's per-container cap still applies underneath.
+- **No raw IP is stored.** The row key is an HMAC of the IP keyed on
+  `PROXY_SHARED_SECRET`; a plain hash of an IPv4 address is reversible by exhausting the
+  32-bit space. Rows self-expire and are swept opportunistically. This retention is
+  disclosed on the consumer health data privacy policy page.
+- Not a bot challenge: a distributed attacker with many source IPs is still limited only
+  by the per-IP rules. Add Turnstile or a WAF rule if that becomes a real problem.
 
 ## Upload safety (DoS / decompression bombs)
 

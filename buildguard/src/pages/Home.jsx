@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { Container, Eyebrow, Button } from "../components/ui.jsx";
 import LedgerDemo from "../components/LedgerDemo.jsx";
 import { STEPS } from "../content.js";
@@ -23,8 +24,15 @@ export default function Home() {
               <Button to="/analyze" size="lg">Analyze a bill</Button>
               <Button to="/how-it-works" variant="secondary" size="lg">How it works</Button>
             </div>
+            {/* MHMDA (RCW 19.373.020) requires the consumer health data privacy
+                policy to be prominently linked from the homepage, not only the footer. */}
             <p className="mt-6 font-mono text-xs text-muted">
               No account · nothing stored · reads in memory and discards
+            </p>
+            <p className="mt-2 text-xs text-ink-soft">
+              <Link to="/privacy" className="rounded-md font-medium text-brand-700 underline underline-offset-2">
+                Consumer Health Data Privacy Policy
+              </Link>
             </p>
           </div>
 

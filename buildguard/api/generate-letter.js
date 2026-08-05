@@ -17,7 +17,7 @@ export default async function handler(req, res) {
   if (!originAllowed(req)) {
     return res.status(403).json({ detail: "Forbidden" });
   }
-  const rl = rateLimit(req, "letter", LETTER_RULES);
+  const rl = await rateLimit(req, "letter", LETTER_RULES);
   if (!rl.allowed) {
     res.setHeader("Retry-After", String(rl.retryAfterSec));
     return res.status(429).json({ detail: "You've reached the dispute-letter limit for now. Please try again later." });

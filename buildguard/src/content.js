@@ -9,6 +9,37 @@ export const SITE = {
   url: "https://medbill.kyuruki.cc",
 };
 
+// Contact route for privacy / consumer-health-data rights requests. Washington's
+// My Health My Data Act requires a stated mechanism to exercise those rights, so
+// this address has to actually receive mail.
+export const CONTACT_EMAIL = "privacy@kyuruki.cc";
+
+// The third parties that process a request, by category. MHMDA RCW 19.373.020
+// requires the categories of third parties with whom data is shared to be listed,
+// so this is the source of truth for that table and must stay accurate.
+export const PROCESSORS = [
+  {
+    name: "Vercel",
+    role: "Website hosting and the API layer",
+    data: "Receives your upload in transit and your IP address. Does not store the file.",
+  },
+  {
+    name: "Modal",
+    role: "Runs the analysis (OCR and code extraction)",
+    data: "Processes the bill in memory to read text. Nothing is written to disk or kept.",
+  },
+  {
+    name: "Neon",
+    role: "Database of published CMS reference rates",
+    data: "Holds no data from your bill. Also stores the rate-limit counters described below.",
+  },
+  {
+    name: "Anthropic",
+    role: "Drafts the letter, only if you ask for one",
+    data: "Receives the billing codes, amounts and CMS rates, plus any name you type. Never the bill image or the scanned text.",
+  },
+];
+
 // Primary nav (header). Privacy lives in the footer.
 export const NAV = [
   { to: "/how-it-works", label: "How it works" },
@@ -40,9 +71,9 @@ export const PAGE_META = {
       "Answers about how MedBill Analyzer compares charges to CMS Medicare reference rates, what those rates mean, how your bill is handled, and whether it's affiliated with Medicare.",
   },
   "/privacy": {
-    title: "Privacy | MedBill Analyzer",
+    title: "Consumer Health Data Privacy Policy | MedBill Analyzer",
     description:
-      "How MedBill Analyzer handles your bill: processed in memory and discarded, with no accounts and nothing stored. Health-adjacent data is kept to a minimum.",
+      "What MedBill Analyzer collects from your bill, why, who processes it, and how to exercise your rights. Bills are processed in memory and discarded; there are no accounts.",
   },
   "/about": {
     title: "About | MedBill Analyzer",

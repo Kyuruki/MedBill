@@ -3,7 +3,11 @@ import { NAV, DISCLAIMER } from "../content.js";
 import { Container } from "./ui.jsx";
 import BrandMark from "./BrandMark.jsx";
 
-const FOOTER_LINKS = [...NAV, { to: "/privacy", label: "Privacy" }, { to: "/analyze", label: "Analyze a bill" }];
+const FOOTER_LINKS = [
+  ...NAV,
+  { to: "/privacy", label: "Privacy & health data" },
+  { to: "/analyze", label: "Analyze a bill" },
+];
 
 export default function Footer() {
   return (
