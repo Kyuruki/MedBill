@@ -338,12 +338,23 @@ def enrich_with_fee_schedule(line_items: list[dict]) -> list[dict]:
     try:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT hcpcs_code, non_facility_rate FROM fee_schedule WHERE hcpcs_code = ANY(%s)",
+                "SELECT hcpcs_code, non_facility_rate, professional_only "
+                "FROM fee_schedule WHERE hcpcs_code = ANY(%s)",
                 (codes,),
             )
-            physician_rates = {row[0]: float(row[1]) for row in cur.fetchall()}
+            physician_rates: dict[str, float] = {}
+            professional_only: set[str] = set()
+            for code, rate, is_pc_only in cur.fetchall():
+                physician_rates[code] = float(rate)
+                if is_pc_only:
+                    professional_only.add(code)
 
-            remaining = [c for c in codes if c not in physician_rates]
+            # A professional-component-only rate prices the interpretation, not the whole
+            # service, so comparing a full billed charge against it manufactures
+            # overcharges. For those codes the CLFS payment is the right benchmark when
+            # one exists; when it doesn't, the item is left Unverified below rather than
+            # measured against a partial rate.
+            remaining = [c for c in codes if c not in physician_rates or c in professional_only]
             clfs_rates: dict[str, float] = {}
             if remaining:
                 cur.execute(
@@ -357,10 +368,13 @@ def enrich_with_fee_schedule(line_items: list[dict]) -> list[dict]:
     enriched: list[dict] = []
     for item in line_items:
         code = item["code"]
-        if code in physician_rates:
-            medicare_rate, source = physician_rates[code], "physician_fee_schedule"
-        elif code in clfs_rates:
+        if code in clfs_rates:
+            # CLFS wins for the ~18 codes in both tables: every one of those has a
+            # professional-component-only PFS entry (a flat interpretation fee), and
+            # the lab payment is what the bill is actually for.
             medicare_rate, source = clfs_rates[code], "clinical_lab_fee_schedule"
+        elif code in physician_rates and code not in professional_only:
+            medicare_rate, source = physician_rates[code], "physician_fee_schedule"
         else:
             medicare_rate, source = None, None
 

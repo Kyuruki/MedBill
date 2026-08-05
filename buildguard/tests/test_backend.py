@@ -1,7 +1,10 @@
 """Unit tests for the pure logic in backend.py: file sniffing, Stage 1
-extraction, request validation, trust-boundary checks, rate limiting, input
-sanitization, and letter prompt assembly. DB and OCR paths are not exercised
-here (they need Postgres and Tesseract)."""
+extraction, fee-schedule enrichment (against a stubbed cursor), request
+validation, trust-boundary checks, rate limiting, input sanitization, and letter
+prompt assembly. OCR paths are not exercised here (they need Tesseract)."""
+
+import sys
+import types
 
 import pytest
 from fastapi import HTTPException, Request
@@ -41,6 +44,114 @@ class TestSniffFileType:
     def test_unknown_and_short_input(self):
         assert backend.sniff_file_type(b"GIF89a") == "unknown"
         assert backend.sniff_file_type(b"") == "unknown"
+
+
+class FakeCursor:
+    """Stands in for a psycopg2 cursor, answering the two batched lookups
+    `enrich_with_fee_schedule` makes from in-memory fixtures."""
+
+    def __init__(self, pfs, clfs):
+        self._pfs, self._clfs, self._rows = pfs, clfs, []
+
+    def execute(self, sql, params):
+        codes = set(params[0])
+        if "clfs_fee_schedule" in sql:
+            self._rows = [(c, r) for c, r in self._clfs.items() if c in codes]
+        else:
+            self._rows = [(c, r, pc) for c, (r, pc) in self._pfs.items() if c in codes]
+
+    def fetchall(self):
+        return self._rows
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+class FakeConnection:
+    def __init__(self, cursor):
+        self._cursor = cursor
+
+    def cursor(self):
+        return self._cursor
+
+    def close(self):
+        pass
+
+
+@pytest.fixture
+def enrich(monkeypatch):
+    """enrich_with_fee_schedule with the DB replaced. This function computes every
+    number the product displays and is called by both endpoints, so it is worth
+    testing without a live Neon."""
+
+    def _run(line_items, pfs=None, clfs=None):
+        cursor = FakeCursor(pfs or {}, clfs or {})
+        fake_psycopg2 = types.SimpleNamespace(connect=lambda *a, **k: FakeConnection(cursor))
+        monkeypatch.setitem(sys.modules, "psycopg2", fake_psycopg2)
+        monkeypatch.setenv("DATABASE_URL", "postgresql://stub")
+        return backend.enrich_with_fee_schedule(line_items)
+
+    return _run
+
+
+class TestEnrichWithFeeSchedule:
+    def test_physician_rate_drives_overcharge_and_multiple(self, enrich):
+        [item] = enrich([{"code": "70450", "charged": 500.0}], pfs={"70450": (106.55, False)})
+        assert item["found_in_fee_schedule"] is True
+        assert item["rate_source"] == "physician_fee_schedule"
+        assert item["medicare_rate"] == 106.55
+        assert item["overcharge_amount"] == 393.45
+        assert item["overcharge_multiple"] == 4.69
+
+    def test_unknown_code_is_unverified_not_guessed(self, enrich):
+        [item] = enrich([{"code": "99999", "charged": 500.0}])
+        assert item["found_in_fee_schedule"] is False
+        assert item["medicare_rate"] is None
+        assert item["overcharge_amount"] is None
+
+    def test_clfs_is_the_fallback_when_pfs_has_no_entry(self, enrich):
+        [item] = enrich([{"code": "80053", "charged": 210.0}], clfs={"80053": (11.6)})
+        assert item["rate_source"] == "clinical_lab_fee_schedule"
+        assert item["medicare_rate"] == 11.6
+
+    def test_zero_rate_is_unverified_not_a_division_by_zero(self, enrich):
+        """Anaesthesia and $0.00 CLFS entries must not anchor an overcharge."""
+        [item] = enrich([{"code": "00100", "charged": 900.0}], clfs={"00100": 0.0})
+        assert item["found_in_fee_schedule"] is False
+        assert item["overcharge_multiple"] is None
+
+    # --- professional-component-only rates ---
+    # These price the interpretation, not the whole service. Measuring a full billed
+    # charge against one manufactures an overcharge, so CLFS wins where it exists and
+    # the item is Unverified where it doesn't.
+
+    def test_clfs_beats_a_professional_only_pfs_entry(self, enrich):
+        [item] = enrich(
+            [{"code": "86320", "charged": 120.0}],
+            pfs={"86320": (18.13, True)},
+            clfs={"86320": 29.92},
+        )
+        assert item["rate_source"] == "clinical_lab_fee_schedule"
+        assert item["medicare_rate"] == 29.92
+
+    def test_professional_only_without_clfs_is_unverified(self, enrich):
+        [item] = enrich([{"code": "88399", "charged": 400.0}], pfs={"88399": (18.13, True)})
+        assert item["found_in_fee_schedule"] is False
+        assert item["medicare_rate"] is None
+
+    def test_full_pfs_entry_still_beats_clfs(self, enrich):
+        [item] = enrich(
+            [{"code": "85390", "charged": 200.0}],
+            pfs={"85390": (36.61, False)},
+            clfs={"85390": 15.48},
+        )
+        assert item["rate_source"] == "physician_fee_schedule"
+
+    def test_empty_input_makes_no_query(self, enrich):
+        assert enrich([]) == []
 
 
 class TestExtractLineItems:
