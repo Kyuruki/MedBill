@@ -182,6 +182,9 @@ rate_source, medicare_rate, overcharge_amount, overcharge_multiple`.
   (in `lib/proxy.js`) already include `medbill.kyuruki.cc` + the `.vercel.app` aliases,
   plus any `*.kyuruki.cc` and this project's `buildguard-*.vercel.app` preview URLs.
 - `MODAL_ANALYZE_URL`, `MODAL_LETTER_URL` *(optional)* → override the Modal endpoint URLs.
+- **`DATABASE_URL`** → the same Neon connection string the backend uses. **Required for
+  durable rate limiting** (`lib/ratelimit.js`); without it the limiter silently degrades
+  to per-instance in-memory counters, which do not actually limit anything.
 
 **Loaders** read `DATABASE_URL` from a local `.env` via `python-dotenv`. `.env` is gitignored.
 
@@ -193,13 +196,27 @@ browser; there are none. `PROXY_SHARED_SECRET` lives only in the serverless prox
 - **Trust boundary:** the `/api` proxy is the only intended caller of Modal. It attaches
   `X-Proxy-Secret`; Modal verifies it (constant-time) and 403s otherwise. The proxy also
   rejects browser cross-origin requests via an Origin allowlist (`lib/proxy.js`).
-- **Rate limiting (Phase 2):** per-IP limits at the proxy (`lib/ratelimit.js`) — analyze
-  **10/min + 50/day**, generate-letter **5/hour** — returning **429 + `Retry-After`** with
-  a UI-friendly message. Best-effort/in-memory (per serverless instance): counters aren't
-  shared across instances and reset on cold starts, so a client spread over N warm
-  instances can get up to N× the limit. Modal adds a coarser per-container cap
-  (`coarse_rate_limit`, keyed on the proxy-forwarded `X-Client-IP`) as defense-in-depth.
-  Upgrade path: swap `lib/ratelimit.js` for Upstash/Redis for durable cross-instance limits.
+- **Rate limiting:** per-IP limits at the proxy (`lib/ratelimit.js`) — analyze
+  **10/min + 50/day**, generate-letter **5/hour** — returning **429 + `Retry-After`**.
+  **Durable since 2026-08-04**: counters live in the Neon `rate_limit` table via
+  `@neondatabase/serverless`, upserted atomically with `ON CONFLICT`, so they hold across
+  serverless instances. The previous in-memory Map did not actually limit anything — a
+  live measurement served **48 of 50 requests from one IP in ~70s** against a documented
+  10/min, because each instance had its own counter.
+  - **Requires `DATABASE_URL` in the Vercel project env.** Without it the module silently
+    falls back to the old in-memory limiter, i.e. no protection. Check this first if the
+    limit ever looks wrong.
+  - Falls back to in-memory on any DB error or a >1.5s query, so a database problem
+    degrades the limiter instead of taking the site down. `durable: false` in the result
+    marks that path.
+  - **The raw IP is never stored.** The key is an HMAC keyed on `PROXY_SHARED_SECRET`;
+    an unsalted hash of an IPv4 address is reversible in seconds. Rows carry their own
+    expiry and are swept opportunistically (~1 in 200 requests).
+  - Unlike the in-memory version this increments *then* checks, because the increment has
+    to be atomic to mean anything. A denied request therefore consumes quota but does not
+    extend the window.
+  - Modal keeps a coarser per-container cap (`coarse_rate_limit`, keyed on the
+    proxy-forwarded `X-Client-IP`) as defense-in-depth.
 - **Upload safety:** validated by **magic bytes** (PNG/JPEG/PDF), 4 MB proxy cap, and
   decompression-bomb guards — PDF page count is checked (`pdfinfo`) *before* rasterizing;
   images are rejected by pixel/dimension caps before decoding (`Image.MAX_IMAGE_PIXELS`).
@@ -224,6 +241,11 @@ browser; there are none. `PROXY_SHARED_SECRET` lives only in the serverless prox
 |----------------------|----------------------------------------------------------------------------|-------|--------|
 | `fee_schedule`       | `hcpcs_code` (PK), `non_facility_rate`, `facility_rate`, `professional_only` | 7,835 | CMS Physician Fee Schedule (PFALL26AR.txt, CY2026 non-QP, CF $33.40) |
 | `clfs_fee_schedule`  | `hcpcs_code` (PK), `payment_rate`                                           | 2,055 | CMS Clinical Lab Fee Schedule (PUF_CLFS_CY2026_Q2V1.csv) |
+| `rate_limit`         | `key` (PK), `count`, `reset_at`                                            | churns | Written by the Vercel proxy — see "Rate limiting" |
+
+`rate_limit` is the **only** table the app writes to, and it holds no bill data: the key
+is an HMAC of the client IP, and rows self-expire. It is safe to `DELETE FROM rate_limit`
+at any time (it only resets counters); the two fee tables are still read-only.
 
 - `analyze` reads `fee_schedule.non_facility_rate` and `clfs_fee_schedule.payment_rate`.
 - **Never** `DROP`/`TRUNCATE`/`DELETE` these or re-run `load_fees.py`/`load_clfs.py`.

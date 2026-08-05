@@ -22,7 +22,7 @@ export default async function handler(req, res) {
   if (!originAllowed(req)) {
     return res.status(403).json({ detail: "Forbidden" });
   }
-  const rl = rateLimit(req, "analyze", ANALYZE_RULES);
+  const rl = await rateLimit(req, "analyze", ANALYZE_RULES);
   if (!rl.allowed) {
     res.setHeader("Retry-After", String(rl.retryAfterSec));
     return res.status(429).json({ detail: "You've hit the analysis limit. Please wait a moment and try again." });
