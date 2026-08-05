@@ -52,7 +52,7 @@ export default function UploadPanel({ file, onFile, onAnalyze, analyzing }) {
           {file ? "Choose a different file" : "Drag a bill here, or choose a file"}
         </span>
         <span id={hintId} className="mt-1 text-sm text-muted">
-          PNG, JPEG, or PDF · up to 20 MB · PDFs up to 30 pages
+          PNG, JPEG, or PDF · up to 4 MB · PDFs up to 30 pages
         </span>
       </label>
 

@@ -39,7 +39,9 @@ stack traces, paths, or secrets are ever returned to the client.
 ### `POST /api/analyze` → Modal `analyze`
 - Request: `multipart/form-data`, field **`file`** (browser → proxy). The proxy buffers
   it in memory and forwards the **raw bytes** to Modal with `X-Proxy-Secret` + `X-Client-IP`.
-- Validation: **magic-byte** sniff (PNG/JPEG/PDF only), **20 MB** cap, decompression-bomb
+- Validation: **magic-byte** sniff (PNG/JPEG/PDF only), **4 MB** proxy cap (Vercel rejects
+  bodies over 4.5 MB before the function runs; the backend's own 20 MB ceiling is
+  therefore unreachable), decompression-bomb
   guards (see below).
 - Response: `{ status, request_id, line_items[], line_items_found }`. **No raw OCR text or
   per-line raw text is returned** (PHI minimization).
@@ -76,7 +78,8 @@ Upstash/Redis for durable, cross-instance limits.
 ## Upload safety (DoS / decompression bombs)
 
 - **Type** is decided by magic bytes, never by extension or client `Content-Type`.
-- **Size:** 20 MB cap at the proxy (`maxFileSize`) and at the backend.
+- **Size:** 4 MB cap at the proxy (`maxFileSize`), enforced first by Vercel's own 4.5 MB
+  request-body limit; the backend keeps a 20 MB ceiling as defense-in-depth.
 - **Images:** rejected before decoding if dimensions exceed the pixel/dimension caps;
   `Image.MAX_IMAGE_PIXELS` guards against decompression bombs.
 - **PDFs:** rendered fully **in memory with PyMuPDF** (no poppler subprocess/tempfiles).

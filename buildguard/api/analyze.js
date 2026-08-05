@@ -6,7 +6,10 @@ import { rateLimit, clientIp } from "../lib/ratelimit.js";
 // formidable needs the raw request stream, so disable Vercel's body parsing.
 export const config = { api: { bodyParser: false } };
 
-const MAX_UPLOAD_BYTES = 20 * 1024 * 1024; // 20 MB
+// 4 MB, not the backend's 20 MB: Vercel rejects request bodies over 4.5 MB before this
+// function is invoked, so anything larger can never reach formidable anyway. Advertising
+// the real limit is the only way the user gets our error instead of a platform one.
+const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
 const ANALYZE_RULES = [
   { name: "min", limit: 10, windowMs: 60_000 },
   { name: "day", limit: 50, windowMs: 86_400_000 },
@@ -45,7 +48,10 @@ export default async function handler(req, res) {
     uploaded = files?.file?.[0];
   } catch (err) {
     if (err && /maxFileSize|options\.maxFileSize/i.test(String(err.message))) {
-      return res.status(413).json({ detail: "File too large. Maximum size is 20 MB." });
+      return res.status(413).json({
+        detail:
+          "That file is too large to upload (the limit is 4 MB). Phone photos are often bigger than this: try screenshotting the bill, or scanning it to PDF.",
+      });
     }
     return res.status(400).json({ detail: "Could not read the uploaded file." });
   }

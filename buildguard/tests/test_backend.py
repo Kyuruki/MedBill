@@ -70,6 +70,66 @@ class TestExtractLineItems:
         text = "99213 Visit $250.00\nnoise line\n36415 Draw $22.00"
         assert [i["code"] for i in backend.extract_line_items(text)] == ["99213", "36415"]
 
+    def test_comma_less_thousands_are_not_truncated(self):
+        """The old pattern read this as $345.00 — always downward, so the worst line on a
+        bill got a green badge. Regression guard."""
+        items = backend.extract_line_items("27447 Knee replacement 12345.00")
+        assert items[0]["charged"] == 12345.00
+
+    def test_comma_less_millions_are_not_truncated(self):
+        items = backend.extract_line_items("27447 Knee replacement 1234567.89")
+        assert items[0]["charged"] == 1234567.89
+
+    def test_padded_reference_number_is_not_read_as_money(self):
+        """A leading zero means it is a padded identifier, not a charge."""
+        assert backend.extract_line_items("99213 REF#00123456.78") == []
+
+    def test_absurd_digit_run_is_not_a_charge(self):
+        assert backend.extract_line_items("99213 Visit 12345678901234567890.00") == []
+
+    def test_charge_above_ceiling_is_dropped(self):
+        assert backend.extract_line_items("99213 Visit 99,999,999.00") == []
+
+    def test_charge_below_ceiling_survives(self):
+        items = backend.extract_line_items("99213 Visit 9,999,999.00")
+        assert items[0]["charged"] == 9999999.00
+
+    # --- Fabricated line items: 5-digit numbers that are not billing codes ---
+    # Note 10021 and 11042 are simultaneously real US ZIPs and real CPT codes, so
+    # "is it a valid code?" cannot be the test. The line's shape has to be.
+
+    def test_zip_after_state_is_not_a_code(self):
+        assert backend.extract_line_items("SPRINGFIELD IL 11042 $1,240.00") == []
+
+    def test_zip_that_is_also_a_valid_cpt_is_not_a_code(self):
+        assert backend.extract_line_items("NEW YORK NY 10021 $980.00") == []
+
+    @pytest.mark.parametrize(
+        "line",
+        [
+            "TOTAL CHARGES 24500.00",
+            "Account No 45219  $300.00",
+            "Balance due 11042 $500.00",
+            "AMOUNT DUE 99213 $250.00",
+            "Insurance paid 80053 $210.00",
+            "Statement date 10021 $980.00",
+            "Patient ID 36415 $22.00",
+            "MRN 27447 $32,450.00",
+        ],
+    )
+    def test_non_item_lines_are_rejected(self, line):
+        assert backend.extract_line_items(line) == []
+
+    def test_real_line_items_still_survive_the_filters(self):
+        text = (
+            "99213 Office visit, established patient   250.00\n"
+            "70450 CT HEAD W/O CONTRAST              1450.00\n"
+            "36415 Routine venipuncture                 22.00"
+        )
+        items = backend.extract_line_items(text)
+        assert [i["code"] for i in items] == ["99213", "70450", "36415"]
+        assert [i["charged"] for i in items] == [250.0, 1450.0, 22.0]
+
 
 class TestLineItemValidation:
     def test_valid_item(self):

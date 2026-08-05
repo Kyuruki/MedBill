@@ -2,8 +2,9 @@ const money = (n) => `$${Number(n || 0).toFixed(2)}`;
 
 function StatusBadge({ status }) {
   const map = {
-    overcharged: { label: "Overcharged", cls: "bg-flag-bg text-flag" },
-    ok: { label: "Within range", cls: "bg-ok-bg text-ok" },
+    far: { label: "Far above reference", cls: "bg-flag-bg text-flag" },
+    above: { label: "Above reference", cls: "bg-warn-bg text-warn" },
+    near: { label: "Near reference", cls: "bg-ok-bg text-ok" },
     unverified: { label: "Unverified", cls: "bg-warn-bg text-warn" },
   };
   const { label, cls } = map[status];
@@ -15,9 +16,15 @@ function StatusBadge({ status }) {
   );
 }
 
+// Commercial rates commonly run 2-3x Medicare and that is ordinary and lawful, so
+// "above the reference rate" is not by itself a finding. The bands mark where a charge
+// stops being ordinary: ~2x is the usual reasonable-charge line, 5x and up is an outlier.
 function rowStatus(li) {
   if (!li.found_in_fee_schedule) return "unverified";
-  return li.overcharge_amount > 0 ? "overcharged" : "ok";
+  const multiple = li.overcharge_multiple || 0;
+  if (multiple >= 5) return "far";
+  if (multiple >= 2) return "above";
+  return "near";
 }
 
 // A summary stat. The overcharge one is emphasized when money is at stake.
@@ -48,8 +55,12 @@ export default function ResultsTable({ lineItems, summary }) {
     <div className="space-y-6">
       <dl className="grid grid-cols-2 gap-x-6 gap-y-5 rounded-[var(--radius-card)] border border-line bg-paper-2 p-5 sm:grid-cols-3">
         <Stat label="Total charged" value={money(summary.totalCharged)} />
-        <Stat label="Potential overcharge" value={money(summary.totalOvercharge)} tone="flag" />
-        <Stat label="Verified vs. CMS" value={`${summary.verifiedCount} / ${summary.total}`} />
+        <Stat
+          label="Highest vs. reference"
+          value={summary.maxMultiple ? `${summary.maxMultiple.toFixed(1)}×` : "-"}
+          tone={summary.maxMultiple >= 5 ? "flag" : "ink"}
+        />
+        <Stat label="Codes we could check" value={`${summary.verifiedCount} / ${summary.total}`} />
       </dl>
 
       {/* Scrollable on narrow screens; the region is keyboard-focusable so it can be scrolled. */}
@@ -61,14 +72,15 @@ export default function ResultsTable({ lineItems, summary }) {
       >
         <table className="w-full min-w-[36rem] border-collapse text-left">
           <caption className="sr-only">
-            Each billing code with the amount charged, the CMS Medicare reference rate, the overcharge, and its status.
+            Each billing code with the amount charged, the CMS Medicare reference rate, the charge as a multiple of that
+            rate, and its status.
           </caption>
           <thead>
             <tr className="border-b border-line bg-paper-2 text-xs uppercase tracking-wide text-muted">
               <th scope="col" className="px-4 py-3 font-medium">Code</th>
               <th scope="col" className="px-4 py-3 text-right font-medium">Charged</th>
               <th scope="col" className="px-4 py-3 text-right font-medium">Medicare</th>
-              <th scope="col" className="px-4 py-3 text-right font-medium">Overcharge</th>
+              <th scope="col" className="px-4 py-3 text-right font-medium">vs. reference</th>
               <th scope="col" className="px-4 py-3 font-medium">Status</th>
             </tr>
           </thead>
@@ -76,17 +88,16 @@ export default function ResultsTable({ lineItems, summary }) {
             {lineItems.map((li, i) => {
               const status = rowStatus(li);
               return (
-                <tr key={i} className={status === "overcharged" ? "bg-flag-bg/40" : ""}>
+                <tr key={i} className={status === "far" ? "bg-flag-bg/40" : ""}>
                   <th scope="row" className="border-t border-line px-4 py-3 font-semibold text-ink">{li.code}</th>
                   <td className="border-t border-line px-4 py-3 text-right text-ink">{money(li.charged)}</td>
                   <td className="border-t border-line px-4 py-3 text-right text-ink-soft">
                     {li.medicare_rate != null ? money(li.medicare_rate) : "-"}
                   </td>
                   <td className="border-t border-line px-4 py-3 text-right">
-                    {status === "overcharged" ? (
-                      <span className="font-semibold text-flag">
-                        {money(li.overcharge_amount)}
-                        <span className="ml-1 text-xs font-medium text-flag">{li.overcharge_multiple}×</span>
+                    {li.overcharge_multiple != null ? (
+                      <span className={status === "far" ? "font-semibold text-flag" : "text-ink"}>
+                        {li.overcharge_multiple}×
                       </span>
                     ) : (
                       <span className="text-muted">-</span>

@@ -1,6 +1,6 @@
 // A stylized fragment of an itemized statement showing the core reconciliation:
-// billed vs. Medicare reference, with the overcharge flagged. It's illustrative
-// (sample data), presented as a labelled figure for screen readers.
+// billed vs. Medicare reference, as a multiple. It's illustrative (sample data),
+// presented as a labelled figure for screen readers.
 
 const ROWS = [
   { code: "99213", label: "Office visit, established patient", billed: 250.0, ref: 91.0 },
@@ -9,7 +9,7 @@ const ROWS = [
 ];
 
 const money = (n) => `$${n.toFixed(2)}`;
-const TOTAL_OVERCHARGE = ROWS.reduce((sum, r) => sum + (r.billed - r.ref), 0);
+const MAX_MULTIPLE = Math.max(...ROWS.map((r) => r.billed / r.ref));
 
 export default function LedgerDemo() {
   return (
@@ -31,12 +31,11 @@ export default function LedgerDemo() {
               <th scope="col" className="py-2 pr-2 font-medium">Code</th>
               <th scope="col" className="py-2 pr-2 text-right font-medium">Charged</th>
               <th scope="col" className="py-2 pr-2 text-right font-medium">Medicare</th>
-              <th scope="col" className="py-2 pl-2 text-right font-medium">Overcharge</th>
+              <th scope="col" className="py-2 pl-2 text-right font-medium">vs. reference</th>
             </tr>
           </thead>
           <tbody className="tnums font-mono text-sm">
             {ROWS.map((r) => {
-              const over = r.billed - r.ref;
               const mult = r.billed / r.ref;
               return (
                 <tr key={r.code} className="border-t border-line/70 align-top">
@@ -47,8 +46,9 @@ export default function LedgerDemo() {
                   <td className="py-3 pr-2 text-right text-ink">{money(r.billed)}</td>
                   <td className="py-3 pr-2 text-right text-ink-soft">{money(r.ref)}</td>
                   <td className="py-3 pl-2 text-right">
-                    <span className="font-semibold text-flag">{money(over)}</span>
-                    <span className="mt-0.5 block text-xs font-medium text-flag">{mult.toFixed(1)}×</span>
+                    <span className={mult >= 5 ? "font-semibold text-flag" : "font-semibold text-ink"}>
+                      {mult.toFixed(1)}×
+                    </span>
                   </td>
                 </tr>
               );
@@ -58,8 +58,8 @@ export default function LedgerDemo() {
       </div>
 
       <figcaption className="flex items-center justify-between border-t border-line bg-paper-2 px-5 py-3 text-sm">
-        <span className="font-medium text-ink">Flagged overcharge</span>
-        <span className="tnums font-mono font-semibold text-flag">{money(TOTAL_OVERCHARGE)}</span>
+        <span className="font-medium text-ink">Highest vs. reference</span>
+        <span className="tnums font-mono font-semibold text-flag">{MAX_MULTIPLE.toFixed(1)}×</span>
       </figcaption>
     </figure>
   );
