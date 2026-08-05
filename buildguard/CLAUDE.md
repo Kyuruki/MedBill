@@ -220,15 +220,41 @@ browser; there are none. `PROXY_SHARED_SECRET` lives only in the serverless prox
 
 ## Database (Neon Postgres) — ALREADY POPULATED, DO NOT WIPE OR RELOAD
 
-| Table                | Columns                                              | Rows  | Source |
-|----------------------|------------------------------------------------------|-------|--------|
-| `fee_schedule`       | `hcpcs_code`, `non_facility_rate`, `facility_rate`   | 7,835 | CMS Physician Fee Schedule (PFALL26AR.txt) |
-| `clfs_fee_schedule`  | `hcpcs_code` (PK), `payment_rate`                     | 2,055 | CMS Clinical Lab Fee Schedule (PUF_CLFS_CY2026_Q2V1.csv) |
+| Table                | Columns                                                                    | Rows  | Source |
+|----------------------|----------------------------------------------------------------------------|-------|--------|
+| `fee_schedule`       | `hcpcs_code` (PK), `non_facility_rate`, `facility_rate`, `professional_only` | 7,835 | CMS Physician Fee Schedule (PFALL26AR.txt, CY2026 non-QP, CF $33.40) |
+| `clfs_fee_schedule`  | `hcpcs_code` (PK), `payment_rate`                                           | 2,055 | CMS Clinical Lab Fee Schedule (PUF_CLFS_CY2026_Q2V1.csv) |
 
 - `analyze` reads `fee_schedule.non_facility_rate` and `clfs_fee_schedule.payment_rate`.
-- **Never** `DROP`/`TRUNCATE`/`DELETE` these or re-run the loaders. Additive
-  migrations only (`CREATE TABLE`/`ADD COLUMN`/`CREATE INDEX`), and stop-and-ask
-  before anything destructive.
+- **Never** `DROP`/`TRUNCATE`/`DELETE` these or re-run `load_fees.py`/`load_clfs.py`.
+  Additive migrations only (`CREATE TABLE`/`ADD COLUMN`/`CREATE INDEX`), and
+  stop-and-ask before anything destructive. To correct rates in place, use
+  **`fix_fee_schedule_rates.py`** — UPDATE-only, dry-run by default, never empties
+  the table (`--apply` to commit). It downloads the CMS source itself.
+
+**`professional_only`** (added 2026-08-04) marks the 117 codes CMS publishes *only*
+as a `-26` professional-component row, with no global row. Such a rate prices the
+interpretation, not the whole service, so comparing a full billed charge against it
+manufactures overcharges. `enrich_with_fee_schedule` therefore prefers CLFS for those
+codes and returns **Unverified** when no CLFS entry exists, rather than measuring
+against a partial rate. All 18 codes present in both tables are professional-only in
+PFS (a flat ~$18.13 interpretation fee), which is why CLFS now wins on overlap.
+
+**Rate history:** the original `load_fees.py` ignored the MODIFIER column and averaged
+each code's global + `26` + `TC` rows. Since PC + TC = global, that stored exactly
+**2/3 of the true rate** for 829 split-billable codes (plus 4 at 3/4 from `53` rows) —
+833 in all, ~10.6% of the table — inflating every multiple shown for radiology,
+cardiology and pathology by exactly 1.5x and reporting anything billed between 0.667x
+and 1x of the true rate as an overcharge that wasn't one. Corrected 2026-08-04 via
+`fix_fee_schedule_rates.py`; `load_fees.py` is now modifier-aware so a future reload
+cannot reintroduce it. A primary key was added at the same time — its absence is what
+let the bug dedupe silently through a Python dict instead of failing loudly.
+
+*Known remaining bias:* rates are still an unweighted mean across the 109 MAC
+localities rather than the national unadjusted amount, which runs ~+1.7% high. That
+points the safe way (a higher reference rate understates overcharges), so it is a
+correctness nit, not a user-facing harm. The UI should not call these "the national
+rate" without qualification.
 
 ## Run locally
 
