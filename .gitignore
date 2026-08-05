@@ -1,0 +1,8 @@
+# Deep-dive audit output. Kept out of the repo deliberately: these files describe
+# the live service's attack surface in detail, and this repo is public. Fine to
+# commit later once nothing they document is still open.
+research/
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db

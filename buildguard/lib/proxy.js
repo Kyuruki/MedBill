@@ -27,11 +27,17 @@ export function originAllowed(req) {
   try {
     const { hostname, protocol } = new URL(origin);
     if (protocol !== "https:") return false;
-    // The owned custom domain (any subdomain) and THIS team's own Vercel
-    // production/preview deployments only, not any buildguard-*.vercel.app tenant.
+    // The owned custom domain (any subdomain) and THIS project's own Vercel
+    // production/preview deployments only.
     if (hostname === "kyuruki.cc" || hostname.endsWith(".kyuruki.cc")) return true;
     if (hostname === "buildguard-alpha.vercel.app") return true;
-    if (hostname.endsWith("-kyurukis-projects.vercel.app")) return true;
+    // Anchored, and scoped to this project rather than the whole team. The previous
+    // `endsWith("-kyurukis-projects.vercel.app")` matched any prefix, so
+    // `x-attacker-kyurukis-projects.vercel.app` passed (verified live). That was not
+    // exploitable — the team slug is globally unique and already owned, so nobody else
+    // can register such a host — but the control did not do what its comment claimed.
+    // Preview hosts look like buildguard-git-<branch>- or buildguard-<hash>-.
+    if (/^buildguard-[a-z0-9-]+-kyurukis-projects\.vercel\.app$/.test(hostname)) return true;
     return false;
   } catch {
     return false;

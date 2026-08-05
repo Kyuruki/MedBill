@@ -41,9 +41,25 @@ describe("originAllowed", () => {
     expect(originAllowed(reqWithOrigin("http://kyuruki.cc"))).toBe(false);
   });
 
-  it("accepts this team's Vercel preview deployments only", () => {
+  it("accepts this project's Vercel preview deployments only", () => {
     expect(originAllowed(reqWithOrigin("https://buildguard-abc-kyurukis-projects.vercel.app"))).toBe(true);
+    expect(originAllowed(reqWithOrigin("https://buildguard-git-main-kyurukis-projects.vercel.app"))).toBe(true);
     expect(originAllowed(reqWithOrigin("https://buildguard-evil.vercel.app"))).toBe(false);
+  });
+
+  it("rejects a hostile prefix on the team suffix", () => {
+    // The previous endsWith() check accepted these (verified live against production).
+    expect(originAllowed(reqWithOrigin("https://x-attacker-kyurukis-projects.vercel.app"))).toBe(false);
+    expect(originAllowed(reqWithOrigin("https://evil-kyurukis-projects.vercel.app"))).toBe(false);
+    expect(originAllowed(reqWithOrigin("https://-kyurukis-projects.vercel.app"))).toBe(false);
+  });
+
+  it("rejects another project under the same team", () => {
+    expect(originAllowed(reqWithOrigin("https://otherapp-abc-kyurukis-projects.vercel.app"))).toBe(false);
+  });
+
+  it("rejects the team suffix used as a prefix of another domain", () => {
+    expect(originAllowed(reqWithOrigin("https://buildguard-a-kyurukis-projects.vercel.app.evil.io"))).toBe(false);
   });
 
   it("rejects lookalike domains", () => {

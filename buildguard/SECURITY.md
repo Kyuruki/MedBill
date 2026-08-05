@@ -26,8 +26,11 @@ Browser ──(same-origin fetch)──▶ Vercel /api proxy ──(X-Proxy-Secr
   dev can opt out with `DANGEROUSLY_ALLOW_UNAUTHENTICATED_PROXY=1`).
 - **The proxy rejects browser cross-origin requests** via an Origin allowlist
   (`lib/proxy.js`): the custom domain (`*.kyuruki.cc`) and this project's own Vercel
-  hosts. Requests with no `Origin` (server-to-server) pass this gate — the shared secret
-  is the real control there.
+  hosts, matched with an anchored pattern. Requests with **no** `Origin` header
+  (server-to-server, `curl`) pass this gate by design — it is a browser control, not an
+  authentication boundary, so do not read it as one. What actually bounds a non-browser
+  caller is the per-IP rate limiting above; what bounds access to Modal is the shared
+  secret.
 - **The Modal URLs are not exposed to the browser.** They live only in the server-side
   proxy; the client bundle contains no endpoints or secrets (verified against the build).
 
