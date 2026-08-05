@@ -8,8 +8,8 @@ export default function HowItWorks() {
         <Eyebrow>How it works</Eyebrow>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight text-ink sm:text-4xl">From photo to dispute letter</h1>
         <p className="mt-4 text-lg leading-relaxed text-ink-soft">
-          MedBill Analyzer runs a simple, transparent pipeline. No AI decides what you were overcharged. The numbers come from
-          your bill and from official CMS fee schedules.
+          MedBill Analyzer runs a simple, transparent pipeline. No AI decides what your charges should have been. The
+          numbers come from your bill and from official CMS fee schedules.
         </p>
       </div>
 
@@ -41,7 +41,7 @@ export default function HowItWorks() {
           <h2 className="text-base font-semibold text-ink">Codes we can't confirm</h2>
           <p className="mt-2 text-sm leading-relaxed text-ink-soft">
             If a code isn't in either schedule, it's marked <strong className="font-semibold text-ink">Unverified</strong>:
-            shown for completeness, never counted as an overcharge.
+            shown for completeness, never compared to a rate we don't have.
           </p>
         </div>
       </div>

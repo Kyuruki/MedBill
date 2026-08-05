@@ -5,7 +5,7 @@ export const SITE = {
   name: "MedBill Analyzer",
   tagline: "A second opinion on your medical bill.",
   description:
-    "Upload a medical or dental bill and check its charges against official CMS Medicare reference rates. See likely overcharges and draft a dispute letter.",
+    "Upload a medical bill and check its charges against official CMS Medicare reference rates. See how each charge compares and draft a letter requesting a review.",
   url: "https://medbill.kyuruki.cc",
 };
 
@@ -22,12 +22,12 @@ export const PAGE_META = {
   "/": {
     title: "MedBill Analyzer: Check your medical bill against Medicare rates",
     description:
-      "Upload a medical or dental bill and check its charges against official CMS Medicare reference rates. See likely overcharges and draft a dispute letter. Free, anonymous, nothing stored.",
+      "Upload a medical bill and check its charges against official CMS Medicare reference rates. See how each charge compares and draft a letter requesting a review. Free, anonymous, nothing stored.",
   },
   "/analyze": {
     title: "Analyze a bill | MedBill Analyzer",
     description:
-      "Upload a bill to check every code against CMS Medicare reference rates, see likely overcharges, and generate a dispute letter. Processed in memory, never stored.",
+      "Upload a bill to check every code against CMS Medicare reference rates, see how each charge compares, and generate a letter requesting a review. Processed in memory, never stored.",
   },
   "/how-it-works": {
     title: "How it works | MedBill Analyzer",
@@ -37,7 +37,7 @@ export const PAGE_META = {
   "/faq": {
     title: "FAQ | MedBill Analyzer",
     description:
-      "Answers about how MedBill Analyzer flags overcharges, what CMS Medicare reference rates mean, how your bill is handled, and whether it's affiliated with Medicare.",
+      "Answers about how MedBill Analyzer compares charges to CMS Medicare reference rates, what those rates mean, how your bill is handled, and whether it's affiliated with Medicare.",
   },
   "/privacy": {
     title: "Privacy | MedBill Analyzer",
@@ -62,7 +62,7 @@ export const STEPS = [
   {
     n: "01",
     title: "Upload your bill",
-    body: "Add a photo or PDF of an itemized medical or dental bill. It's read in memory and never stored.",
+    body: "Add a photo or PDF of an itemized medical bill. It's read in memory and never stored.",
   },
   {
     n: "02",
@@ -76,19 +76,19 @@ export const STEPS = [
   },
   {
     n: "04",
-    title: "See overcharges, draft a letter",
-    body: "Every line shows what you were charged versus the Medicare reference rate. If there are overcharges, generate a dispute letter to send.",
+    title: "See how each line compares",
+    body: "Every line shows what you were charged as a multiple of the Medicare reference rate. If charges sit well above it, generate a letter requesting a review.",
   },
 ];
 
 export const FAQ = [
   {
     q: "What does MedBill Analyzer actually do?",
-    a: "It reads the billing codes and charges off your bill, looks each code up in official CMS Medicare fee schedules, and shows you where a charge sits well above that reference rate. If it finds overcharges, it can draft a dispute letter for you to review and send.",
+    a: "It reads the billing codes and charges off your bill, looks each code up in official CMS Medicare fee schedules, and shows you what each charge works out to as a multiple of that reference rate. If any sit far above it, it can draft a letter requesting a review for you to check and send.",
   },
   {
-    q: "How does it decide something is an overcharge?",
-    a: "For each 5-digit CPT/HCPCS code on your bill, it compares the amount charged to the CMS Medicare reference rate for that same code. When the charge is meaningfully higher than the reference rate, the line is flagged. MedBill Analyzer only flags codes it can confirm in the CMS data.",
+    q: "How should I read the multiple next to each line?",
+    a: "For each 5-digit CPT/HCPCS code, MedBill Analyzer divides the amount charged by the CMS Medicare reference rate for that code. Almost every US bill sits above the reference rate, so a multiple on its own is not a problem: negotiated commercial rates commonly run around two to three times Medicare. It is the far outliers, roughly five times and up, that are worth questioning. MedBill Analyzer only shows a multiple for codes it can confirm in the CMS data.",
   },
   {
     q: "What are CMS Medicare reference rates?",
@@ -103,8 +103,8 @@ export const FAQ = [
     a: "Not every code appears in the CMS fee schedules MedBill Analyzer checks (for example, some facility fees or bundled items). When a code isn't in the data, MedBill Analyzer marks it Unverified rather than guessing. It never asserts an overcharge it can't confirm.",
   },
   {
-    q: "Does an overcharge mean I was defrauded?",
-    a: "No. A charge above the Medicare reference rate is common and can be entirely legitimate. Negotiated rates, facility costs, and your specific plan all vary. A flag is a prompt to ask for an itemized justification, not an accusation.",
+    q: "Does a high multiple mean I was defrauded?",
+    a: "No. A charge above the Medicare reference rate is normal and usually entirely legitimate: negotiated commercial rates typically run around two to three times Medicare, and facility costs and your specific plan vary on top of that. A high multiple is a prompt to ask for an itemized justification, not an accusation.",
   },
   {
     q: "Can I really dispute a bill with the letter?",
@@ -112,7 +112,7 @@ export const FAQ = [
   },
   {
     q: "What files can I upload?",
-    a: "A PNG, JPEG, or PDF up to 20 MB (PDFs up to 30 pages). Clearer scans and photos read more accurately.",
+    a: "A PNG, JPEG, or PDF up to 4 MB (PDFs up to 30 pages). Clearer scans and photos read more accurately. Phone photos are often larger than 4 MB, so you may need to reduce the size or screenshot the bill first.",
   },
   {
     q: "Is MedBill Analyzer affiliated with Medicare or my insurer?",

@@ -11,12 +11,13 @@ export default function Home() {
           <div>
             <Eyebrow>Medical bill review</Eyebrow>
             <h1 id="hero-heading" className="mt-4 text-4xl font-semibold leading-[1.08] tracking-tight text-ink sm:text-5xl">
-              See if your medical bill{" "}
-              <span className="text-brand-700">overcharged you.</span>
+              See how your medical bill{" "}
+              <span className="text-brand-700">compares to Medicare.</span>
             </h1>
             <p className="mt-5 max-w-xl text-lg leading-relaxed text-ink-soft">
-              Upload a bill and MedBill Analyzer checks every billing code against official CMS Medicare reference rates. It
-              flags what's charged above the benchmark, then drafts a dispute letter you can send.
+              Upload a bill and MedBill Analyzer checks every billing code against official CMS Medicare reference rates,
+              showing what each charge works out to as a multiple of the benchmark. If any are far above it, it drafts a
+              letter requesting a review.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-4">
               <Button to="/analyze" size="lg">Analyze a bill</Button>
@@ -68,8 +69,9 @@ export default function Home() {
               actually costs, which makes them a fair yardstick for a charge with no context.
             </p>
             <p className="leading-relaxed">
-              MedBill Analyzer only flags codes it can confirm in the CMS data, and never calls a charge an overcharge it
-              can't verify. A flag isn't an accusation. It's a reason to ask for an itemized justification.
+              MedBill Analyzer only compares codes it can confirm in the CMS data, and never puts a number on a charge it
+              can't verify. Most US charges sit above the benchmark, so a multiple isn't an accusation. A large one is a
+              reason to ask for an itemized justification.
             </p>
             <p>
               <Button to="/faq" variant="ghost" className="-ml-2">Read the FAQ →</Button>

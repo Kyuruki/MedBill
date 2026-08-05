@@ -48,6 +48,9 @@ MAX_IMAGE_DIMENSION = 20_000             # reject absurd width/height (px)
 PDF_RENDER_DPI = 200                     # bounded rasterization resolution
 MAX_LINE_ITEMS = 50                      # cap client-supplied line items
 MAX_TEXT_FIELD_LEN = 120                 # cap free-text fields (names, etc.)
+MAX_CHARGED_AMOUNT = 10_000_000          # matches LineItemIn.charged; above this is OCR garbage
+FUNCTION_TIMEOUT_S = 60                  # hard ceiling per Modal invocation
+ANTHROPIC_TIMEOUT_S = 25                 # x2 attempts stays inside FUNCTION_TIMEOUT_S
 
 # Coarse per-container rate caps (defense-in-depth; the Vercel proxy holds the real,
 # tighter per-IP limits). Best-effort: state is per Modal container, lost on cold start.
@@ -93,8 +96,28 @@ SECRET_PROXY_AUTH = modal.Secret.from_name("proxy-auth")
 
 # --- Stage 1 extraction patterns (no AI) ---
 CODE_PATTERN = re.compile(r"\b(\d{5})\b")
-# Bounded to avoid pathological backtracking on very long OCR lines.
-MONEY_PATTERN = re.compile(r"\$?\s?(\d{1,3}(?:,\d{3}){0,4}\.\d{2})")
+# The leading lookbehind stops the match from starting mid-number, which is what made
+# the old pattern read "12345.00" as "345.00" (always downward, so the worst line on a
+# bill got a green badge). The optional comma lets a comma-less thousands amount match
+# whole; the {0,4} bound is kept so a long OCR digit run can neither backtrack
+# pathologically nor parse as an absurd charge. A money amount never has a leading zero
+# (except cents), which is what keeps padded reference numbers like "REF#00123456.78"
+# from being read as a $123,456.78 charge.
+MONEY_PATTERN = re.compile(r"(?<![\d.,])\$?\s?(0\.\d{2}|[1-9]\d{0,2}(?:,?\d{3}){0,4}\.\d{2})")
+
+# Lines that are addresses, totals, or account references contain 5-digit numbers that
+# are not billing codes (ZIPs, MRNs, invoice numbers). Rejecting the whole line is safer
+# than guessing which number on it is a code: a fabricated line item is worse than a
+# missed one, because generate_letter will happily re-verify it and argue it.
+NON_ITEM_LINE = re.compile(
+    r"\b(zip|account|acct|mrn|invoice|statement\s*(no|number|date)|patient\s*(id|no|number)"
+    r"|total|subtotal|balance|amount\s+due|due\s+by|payment|adjustment|insurance\s+paid"
+    r"|guarantor|policy|group\s*(no|number)|phone|fax)\b",
+    re.IGNORECASE,
+)
+# "AUSTIN TX 78704" — a US ZIP right after a state abbreviation is never a CPT code.
+# 10021 and 11042 are simultaneously real ZIPs and real CPT codes, so this matters.
+ZIP_AFTER_STATE = re.compile(r"\b[A-Za-z]{2}\.?\s+(\d{5})(?:-\d{4})?\b")
 
 
 # ---------------------------------------------------------------------------
@@ -254,9 +277,11 @@ def ocr_pdf_bytes(data: bytes) -> str:
 def extract_line_items(text: str) -> list[dict]:
     """Pull structured billing line items out of raw OCR text using regex only.
 
-    A 5-digit code is kept only when its line also contains a dollar amount,
-    which filters out zip codes, account numbers, and other incidental 5-digit
-    values that are not billing codes.
+    A 5-digit code is kept only when its line also contains a dollar amount AND the
+    line does not look like an address, total, or account reference. The dollar-amount
+    test alone is not enough: ZIPs, MRNs and invoice numbers routinely share a line with
+    money, and several US ZIPs (10021, 11042) are also valid CPT codes, so they used to
+    surface as fabricated line items that the letter would then argue.
     """
     line_items: list[dict] = []
     for line in text.split("\n"):
@@ -264,11 +289,20 @@ def extract_line_items(text: str) -> list[dict]:
         if not code_match:
             continue
 
+        if NON_ITEM_LINE.search(line):
+            continue
+
+        zip_match = ZIP_AFTER_STATE.search(line)
+        if zip_match and zip_match.group(1) == code_match.group(1):
+            continue
+
         money_matches = MONEY_PATTERN.findall(line)
         if not money_matches:
             continue
 
         amounts = [float(m.replace(",", "")) for m in money_matches]
+        if amounts[0] > MAX_CHARGED_AMOUNT:
+            continue
         line_items.append(
             {
                 "code": code_match.group(1),
@@ -413,6 +447,8 @@ Rules for the letter you produce:
 - State that the patient is requesting a review of the listed charges.
 - For each code, cite the amount billed and the CMS Medicare reference rate as a benchmark (a reasonable reference point, not a legal entitlement to that exact rate).
 - Politely request an itemized justification or an adjustment for charges significantly above the reference rate.
+- Early in the letter, state plainly that the codes and amounts below were read automatically from a scanned copy of the bill, and ask the provider to correct any that were misread.
+- Include a sentence stating that this letter is a request for review and is not an acknowledgment of the debt or of any amount owed.
 - Avoid accusatory language (no "fraud" or "illegal"); frame it as a request for clarification/review.
 - Close by requesting a written response within 30 days.
 - Sign off with only the patient's name: no "Authorized Representative," no "On behalf of," no second signature block.
@@ -465,7 +501,7 @@ def build_letter_user_content(req: GenerateLetterRequest, verified: list[dict]) 
 # Endpoints
 # ---------------------------------------------------------------------------
 
-@app.function(secrets=[SECRET_NEON, SECRET_PROXY_AUTH])
+@app.function(secrets=[SECRET_NEON, SECRET_PROXY_AUTH], timeout=FUNCTION_TIMEOUT_S)
 @modal.fastapi_endpoint(method="POST")
 async def analyze(request: Request):
     """OCR + regex extraction + CMS fee-schedule enrichment.
@@ -505,7 +541,9 @@ async def analyze(request: Request):
         raise HTTPException(status_code=500, detail="Internal server error.")
 
 
-@app.function(secrets=[SECRET_ANTHROPIC, SECRET_NEON, SECRET_PROXY_AUTH])
+@app.function(
+    secrets=[SECRET_ANTHROPIC, SECRET_NEON, SECRET_PROXY_AUTH], timeout=FUNCTION_TIMEOUT_S
+)
 @modal.fastapi_endpoint(method="POST")
 async def generate_letter(request: Request):
     """Draft a dispute letter. Client-supplied rates are ignored; overcharges are
@@ -534,7 +572,9 @@ async def generate_letter(request: Request):
 
         import anthropic
 
-        client = anthropic.Anthropic()
+        # Bounded so a slow/hanging API call can't hold the container to its timeout:
+        # the SDK otherwise defaults to 600s with retries.
+        client = anthropic.Anthropic(timeout=ANTHROPIC_TIMEOUT_S, max_retries=1)
         message = client.messages.create(
             model=LETTER_MODEL,
             max_tokens=LETTER_MAX_TOKENS,

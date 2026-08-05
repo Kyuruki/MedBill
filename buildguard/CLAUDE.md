@@ -5,10 +5,22 @@
 
 ## What it is
 
-MedBill Analyzer is an **anonymous** medical/dental bill analyzer. A user uploads a bill
+MedBill Analyzer is an **anonymous** medical bill analyzer. A user uploads a bill
 image or PDF; the app OCRs it, extracts CPT/HCPCS billing codes and dollar amounts,
-compares each code to CMS Medicare reference rates, flags overcharges, and can
-generate a formal dispute letter.
+compares each code to CMS Medicare reference rates, shows each charge as a **multiple**
+of that rate, and can generate a formal letter requesting a review.
+
+**Dental is NOT supported** (removed from all copy 2026-08-04): dental CDT codes are
+`D####` and cannot match the 5-digit code pattern, and there is no CMS dental fee
+schedule loaded. Claiming it meant dental uploads returned zero items with a message
+blaming the user's photo quality.
+
+**Framing (changed 2026-08-04):** the UI no longer says "Overcharged" or sums a "total
+overcharge". Nearly every US charge sits above the Medicare rate — RAND 5.1 puts
+negotiated commercial rates at ~254% of Medicare, KFF at ~199% — so "above the reference
+rate" is a constant, not a finding, and a red badge on every row carried no information.
+Status is now banded on the multiple: `< 2×` Near reference, `2–5×` Above reference,
+`>= 5×` Far above reference. Keep it that way.
 
 - **No login / no accounts** (locked decision). The app is fully anonymous.
 - **Privacy-first:** uploads are meant to be processed **in memory only**. No bill
@@ -81,11 +93,27 @@ every POST endpoint now requires the `X-Proxy-Secret` shared-secret header (see
 **Stage 1 — extraction, no AI** (`extract_line_items`, `backend.py`)
 - Tesseract OCR via `pytesseract` (PDFs rasterized in-memory with **PyMuPDF** — no
   poppler subprocess or temp files).
-- Regex: codes `\b(\d{5})\b`; money `\$?\s?(\d{1,3}(?:,\d{3})*\.\d{2})`.
-- A line becomes a line item only if it has **both** a 5-digit code **and** a dollar
-  amount on the same line (rejects zip/phone/account numbers).
+- Regex: codes `\b(\d{5})\b`; money is **anchored** with `(?<![\d.,])` and rejects a
+  leading zero. Both matter and both are regression-tested:
+  - unanchored, the old pattern read `12345.00` as **`$345.00`** — always downward, so
+    the worst line on a bill got a green badge;
+  - without the leading-zero rule, `REF#00123456.78` parses as a $123,456.78 charge.
+  - the `{0,4}` repetition bound is deliberate (no pathological backtracking, no absurd
+    amounts) — do not replace it with `*`.
+- A line becomes a line item only if it has a 5-digit code **and** a dollar amount **and**
+  the line is not an address/total/account line (`NON_ITEM_LINE`) **and** the code is not
+  a ZIP following a state abbreviation (`ZIP_AFTER_STATE`). The money test alone was not
+  enough: ZIPs `10021` and `11042` are also valid CPT codes, so they surfaced as
+  fabricated line items that `generate_letter` would then re-verify and argue.
+- `charged` above `MAX_CHARGED_AMOUNT` ($10M, same ceiling as `LineItemIn`) is dropped.
 - First money on the line = `charged`, second = `allowed_on_bill`, third = `balance_on_bill`.
-- Caps: **20 MB** upload, **30** PDF pages.
+- Caps: **30** PDF pages; **4 MB** upload at the proxy (`api/analyze.js`). The backend's
+  `MAX_UPLOAD_BYTES` is still 20 MB but is unreachable — **Vercel rejects request bodies
+  over 4.5 MB before the function runs**, returning a plain-text 413 that is not our JSON.
+  `readError()` in `Analyzer.jsx` special-cases that status.
+- Both Modal functions carry `timeout=FUNCTION_TIMEOUT_S` (60s) and the Anthropic client
+  is constructed with `timeout=25, max_retries=1`; without these a hung call held a
+  container for up to 300s (or 600s x2) after the proxy had already aborted at 55s.
 
 **Stage 2 — enrichment, no AI** (`enrich_with_fee_schedule`, `backend.py`)
 - Batch query `fee_schedule` with `WHERE hcpcs_code = ANY(%s)` (avoids N+1).
@@ -172,7 +200,7 @@ browser; there are none. `PROXY_SHARED_SECRET` lives only in the serverless prox
   instances can get up to N× the limit. Modal adds a coarser per-container cap
   (`coarse_rate_limit`, keyed on the proxy-forwarded `X-Client-IP`) as defense-in-depth.
   Upgrade path: swap `lib/ratelimit.js` for Upstash/Redis for durable cross-instance limits.
-- **Upload safety:** validated by **magic bytes** (PNG/JPEG/PDF), 20 MB cap, and
+- **Upload safety:** validated by **magic bytes** (PNG/JPEG/PDF), 4 MB proxy cap, and
   decompression-bomb guards — PDF page count is checked (`pdfinfo`) *before* rasterizing;
   images are rejected by pixel/dimension caps before decoding (`Image.MAX_IMAGE_PIXELS`).
 - **In-memory only:** the proxy buffers the upload in memory (no temp file); the backend
@@ -317,3 +345,6 @@ Loaders — **already ran; do not re-run** (they `TRUNCATE`). Kept for provenanc
 - `SECURITY_FINDINGS.md` — audited vulnerabilities/bad practices (pre-fix baseline).
 - `SECURITY.md` — (Phase 5) the security model, endpoint contract, rate limits,
   data-handling policy.
+- Project history & decision background: Obsidian vault
+  (`/mnt/c/Users/karol/Documents/Obsidian/Main`) — `Projects/BillGuard.md` and
+  `Decisions/Deterministic-then-LLM Pipeline.md`.

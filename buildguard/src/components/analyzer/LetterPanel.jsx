@@ -75,7 +75,8 @@ export default function LetterPanel({
 
       {!canGenerate ? (
         <p className="mt-2 text-sm text-ink-soft">
-          No verified overcharges on this bill, so there's nothing to dispute here.
+          None of the codes we could check came out above the CMS reference rate, so there's nothing here for a letter to
+          argue. That isn't a verdict on the bill as a whole: anything marked Unverified wasn't checked at all.
         </p>
       ) : (
         <>

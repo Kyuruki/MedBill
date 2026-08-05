@@ -1,21 +1,24 @@
 # MedBill Analyzer
 
-Upload a medical or dental bill and check whether its charges are above CMS Medicare
-reference rates. If they are, generate a formal dispute letter in one click. Free,
-anonymous, and nothing you upload is stored.
+Upload a medical bill and see what each charge works out to as a multiple of the CMS
+Medicare reference rate. If any sit far above it, generate a formal letter requesting a
+review in one click. Free, anonymous, and nothing you upload is stored.
 
 **Live:** https://medbill.kyuruki.cc
 
 ## What it does
 
-1. **Upload** a bill as an image (PNG/JPEG) or PDF.
+1. **Upload** a bill as an image (PNG/JPEG) or PDF, up to 4 MB (Vercel's request-body
+   ceiling; the backend's own cap is higher but unreachable through the proxy).
 2. **OCR** extracts the text (Tesseract). PDFs are rasterized in memory (PyMuPDF).
 3. **Regex** pulls out CPT/HCPCS billing codes and dollar amounts. A line only counts if
    it has both a 5-digit code and a dollar amount.
 4. **Fee-schedule lookup** checks each code against the CMS Physician Fee Schedule and the
    CMS Clinical Laboratory Fee Schedule.
 5. **Results** show every line item: what you were charged, the Medicare reference rate,
-   the dollar overcharge, and a status (Overcharged / Within range / Unverified).
+   the charge as a multiple of that rate, and a status (Far above / Above / Near
+   reference, or Unverified). Nearly every US charge is above the Medicare rate, so the
+   multiple — not the fact of exceeding it — is what carries information.
 6. **Dispute letter**: if verified overcharges are found, Claude drafts a professional,
    first-person dispute letter you can copy or download. Overcharges are re-verified
    server-side, so the letter only cites figures MedBill Analyzer confirmed against CMS data.

@@ -1,19 +1,20 @@
 # MedBill Analyzer
 
-> A second opinion on your medical bill. Check its charges against official CMS Medicare reference rates and draft a dispute letter.
+> A second opinion on your medical bill. Check its charges against official CMS Medicare reference rates and draft a letter requesting a review.
 
-MedBill Analyzer is an anonymous, informational web tool. A user uploads a medical or dental
-bill (image or PDF); it reads the billing codes and charges with OCR, compares each code
+MedBill Analyzer is an anonymous, informational web tool. A user uploads a medical bill
+(image or PDF); it reads the billing codes and charges with OCR, compares each code
 to two official CMS fee schedules (the Physician Fee Schedule and the Clinical Laboratory
-Fee Schedule), flags charges that are well above the Medicare reference rate, and can
-draft a dispute letter. There are no accounts. Uploads are processed in memory and never
-stored. Codes not found in the CMS data are marked "Unverified" and never counted as
-overcharges.
+Fee Schedule), shows each charge as a multiple of the Medicare reference rate, and can
+draft a letter requesting a review. There are no accounts. Uploads are processed in memory
+and never stored. Codes not found in the CMS data are marked "Unverified" and are not
+compared to any rate. Only CPT/HCPCS codes written as five digits are recognized; dental
+CDT codes are not covered.
 
 ## Pages
 - [Home](https://medbill.kyuruki.cc/): what MedBill Analyzer is and how to start.
 - [How it works](https://medbill.kyuruki.cc/how-it-works): the OCR → CMS-comparison pipeline, step by step.
-- [FAQ](https://medbill.kyuruki.cc/faq): how overcharges are flagged, what CMS rates mean, privacy, and affiliations.
+- [FAQ](https://medbill.kyuruki.cc/faq): how charges are compared, what CMS rates mean, privacy, and affiliations.
 - [Privacy](https://medbill.kyuruki.cc/privacy): how a bill is handled (in memory, not stored).
 - [About](https://medbill.kyuruki.cc/about): why the tool exists and its independence.
 - [Analyze a bill](https://medbill.kyuruki.cc/analyze): the tool itself.
@@ -21,6 +22,7 @@ overcharges.
 ## Important context
 - Informational only; not legal, medical, or financial advice.
 - Not affiliated with, endorsed by, or connected to CMS, Medicare, or any insurer.
-- Medicare reference rates are a benchmark, not a statement of what a patient owes; a
-  charge above the reference rate can be legitimate and is a prompt to request an
-  itemized justification, not an accusation.
+- Medicare reference rates are a benchmark, not a statement of what a patient owes. Nearly
+  every US charge sits above the Medicare rate — negotiated commercial rates commonly run
+  around two to three times it — so a multiple above 1x is normal, not a finding. Only far
+  outliers are a prompt to request an itemized justification, and never an accusation.
