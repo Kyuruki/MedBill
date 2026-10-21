@@ -75,6 +75,7 @@ npm run dev        # Vite dev server (frontend only)
 npm run build      # production build -> dist/
 npm run lint
 npm test           # vitest unit tests (proxy, rate limiter, /api handlers)
+npm run test:e2e   # Playwright browser tests (first run: npx playwright install chromium)
 ```
 
 Backend tests run with pytest: Stage 1 extraction, fee-schedule enrichment, validation,
@@ -86,9 +87,14 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 .venv/bin/python -m pytest --cov=backend
 ```
 
-**CI:** [GitHub Actions](.github/workflows/ci.yml) runs on every push and PR. One job does
-lint, vitest, and the production build. The other installs Tesseract and runs the full
-pytest suite with coverage.
+Browser tests (`e2e/`, Playwright) drive the production build in Chromium. They cover the
+upload → results → letter flow, error states, routing, keyboard focus, and the mobile
+menu, plus an axe WCAG 2.1 AA scan of every page. `/api` is mocked at the network layer,
+since the serverless functions only run under Vercel.
+
+**CI:** [GitHub Actions](.github/workflows/ci.yml) runs three jobs on every push and PR:
+lint + vitest + production build; pytest with coverage against a real Tesseract install;
+and the Playwright suite. On failure, the Playwright job uploads its report and traces.
 
 > The `/api/*` proxy functions only execute under the Vercel runtime (`vercel dev`) or once
 > deployed. Plain `vite dev` serves the frontend but not the serverless functions.
