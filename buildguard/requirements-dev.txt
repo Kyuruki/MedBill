@@ -1,3 +1,8 @@
-pytest
-fastapi
-pillow
+# Backend test deps. Runtime libs are pinned to the same versions as the Modal image in
+# backend.py so the tests exercise what actually ships.
+pytest==9.1.1
+pytest-cov==7.0.0
+fastapi==0.138.2
+Pillow==12.2.0
+pytesseract==0.3.13
+PyMuPDF==1.28.0

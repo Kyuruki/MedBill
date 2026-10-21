@@ -1,5 +1,7 @@
 # MedBill Analyzer
 
+[![CI](https://github.com/Kyuruki/MedBill/actions/workflows/ci.yml/badge.svg)](https://github.com/Kyuruki/MedBill/actions/workflows/ci.yml)
+
 Upload a medical bill and see what each charge works out to as a multiple of the CMS
 Medicare reference rate. If any sit far above it, generate a formal letter requesting a
 review in one click. Free, anonymous, and nothing you upload is stored.
@@ -75,12 +77,18 @@ npm run lint
 npm test           # vitest unit tests (proxy, rate limiter, /api handlers)
 ```
 
-Backend unit tests (Stage 1 extraction, validation, sanitization) run with pytest:
+Backend tests run with pytest: Stage 1 extraction, fee-schedule enrichment, validation,
+sanitization, the endpoint contracts, upload guards, and real Tesseract OCR on generated
+PNG/PDF bills (those skip locally if `tesseract` isn't installed):
 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
-.venv/bin/python -m pytest tests/test_backend.py
+.venv/bin/python -m pytest --cov=backend
 ```
+
+**CI:** [GitHub Actions](.github/workflows/ci.yml) runs on every push and PR. One job does
+lint, vitest, and the production build. The other installs Tesseract and runs the full
+pytest suite with coverage.
 
 > The `/api/*` proxy functions only execute under the Vercel runtime (`vercel dev`) or once
 > deployed. Plain `vite dev` serves the frontend but not the serverless functions.
