@@ -42,3 +42,4 @@ test_medical_bill.*
 __pycache__/
 *.pyc
 .venv/
+.coverage

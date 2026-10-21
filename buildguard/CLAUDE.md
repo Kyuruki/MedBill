@@ -293,8 +293,12 @@ Backend unit tests (pure logic in `backend.py`; no DB/Tesseract needed; `modal` 
 stubbed in `tests/conftest.py`):
 ```
 python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
-.venv/bin/python -m pytest tests/test_backend.py
+.venv/bin/python -m pytest --cov=backend
 ```
+`tests/test_ocr.py` runs real Tesseract on generated bills; it skips when the binary is
+missing, **except in CI** (`CI` env set), where a skip would hide a broken OCR path.
+CI (`.github/workflows/ci.yml`, repo root) runs both suites, lint, and the build on every
+push/PR. Pins in `requirements-dev.txt` mirror the Modal image; bump them together.
 > Local `/api/*` calls only resolve when running through the Vercel dev runtime
 > (`vercel dev`) or once deployed — plain `vite dev` does not execute the
 > serverless functions.
