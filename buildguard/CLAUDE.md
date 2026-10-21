@@ -287,6 +287,7 @@ npm run dev        # Vite dev server
 npm run build      # production build -> dist/
 npm run lint
 npm test           # vitest unit tests (lib/ + api/ handlers, in tests/)
+npm run test:e2e   # Playwright browser tests (e2e/)
 ```
 
 Backend unit tests (pure logic in `backend.py`; no DB/Tesseract needed; `modal` is
@@ -297,8 +298,13 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 ```
 `tests/test_ocr.py` runs real Tesseract on generated bills; it skips when the binary is
 missing, **except in CI** (`CI` env set), where a skip would hide a broken OCR path.
-CI (`.github/workflows/ci.yml`, repo root) runs both suites, lint, and the build on every
-push/PR. Pins in `requirements-dev.txt` mirror the Modal image; bump them together.
+Browser E2E: `npm run test:e2e` (Playwright; `playwright.config.js` builds and starts
+`vite preview` itself). Specs are `e2e/*.e2e.js`: that suffix keeps vitest from collecting
+them. `/api/*` is mocked with `page.route` because the serverless functions don't run
+under `vite preview`. `site.e2e.js` runs axe (WCAG 2.1 A/AA) on every route, so a contrast
+or labelling regression fails CI.
+CI (`.github/workflows/ci.yml`, repo root) runs three jobs on every push/PR: lint +
+vitest + build; pytest + Tesseract; Playwright. Pins in `requirements-dev.txt` mirror the Modal image; bump them together.
 > Local `/api/*` calls only resolve when running through the Vercel dev runtime
 > (`vercel dev`) or once deployed — plain `vite dev` does not execute the
 > serverless functions.

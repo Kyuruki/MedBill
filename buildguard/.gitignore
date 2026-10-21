@@ -43,3 +43,7 @@ __pycache__/
 *.pyc
 .venv/
 .coverage
+
+# Playwright
+/test-results/
+/playwright-report/

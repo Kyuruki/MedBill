@@ -46,3 +46,25 @@ jobs:
       - run: pip install -r requirements-dev.txt
       # CI=true is set by Actions, so the OCR end-to-end tests run instead of skipping.
       - run: python -m pytest -ra --cov=backend --cov-report=term-missing
+
+  e2e:
+    name: Browser E2E (Playwright + axe WCAG 2.1 AA)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: buildguard/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            buildguard/playwright-report/
+            buildguard/test-results/
+          retention-days: 7
